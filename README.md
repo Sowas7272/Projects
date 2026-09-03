@@ -1,14 +1,14 @@
-\# Overview of My Current Projects and Certifications
+# Overview of My Current Projects and Certifications
 
 
 
-\## Cybersecurity
+# Cybersecurity
 
-\- None completed yet
+- None completed yet
 
 
 
-\## Machine Learning
+# Machine Learning
 
-\- Flower Classification with Keras
+- Flower Classification with Keras
 
