@@ -103,7 +103,63 @@ identified is itself an interesting finding.
 
 ### Step 3: Port & Service Scan
 
-*(to be completed)*
+Use nmap to gather information about your home network in order to determine
+weaknesses.
+
+```
+sudo nmap -sV -sC -O -p- <target address (e.g. router)>
+```
+
+- `sudo` -> root access for the command
+- `nmap` -> call the nmap tool
+- `-sV` flag -> service/version detection: identify which service and which version runs on each open port
+- `-sC` flag -> run nmap's default scripts to gather extra info (titles, certificates, headers, ...)
+- `-O` flag -> OS detection: guess the target's operating system (needs root)
+- `-p-` flag -> scan all 65535 ports instead of only the top 1000
+
+> All identifying values below (public IP, IPv6 address, MAC address, internal
+> device IDs) have been **redacted**. Only the analysis is real.
+
+**Target overview:**
+
+| Item              | Value (anonymized)                       |
+|-------------------|------------------------------------------|
+| Host              | `10.0.0.1` (router / gateway)            |
+| Identified device | AVM FRITZ!Box (home router)              |
+| MAC vendor        | AVM (`AA:BB:CC:DD:EE:FF`)                 |
+| OS (detected)     | Linux kernel 4.15 – 5.19                 |
+| Scan duration     | ~35 s                                    |
+
+**Open ports and services:**
+
+| Port      | Service        | Notes                                           |
+|-----------|----------------|-------------------------------------------------|
+| 53/tcp    | DNS            | Router acts as local DNS resolver               |
+| 80/tcp    | HTTP           | Web admin interface (FRITZ!Box), cleartext      |
+| 443/tcp   | HTTPS (TLS)    | Web admin interface over TLS; self-signed cert  |
+| 5060/tcp  | SIP            | VoIP / telephony (FRITZ!OS)                      |
+| 8089/tcp  | tcpwrapped     | AVM internal service                            |
+| 8181–8189 | HTTP / various | AVM internal services (management/UPnP-like)    |
+| 49000/tcp | (AVM)          | TR-064 style management interface               |
+| 49443/tcp | HTTPS (TLS)    | AVM management over TLS                          |
+| others    | unknown        | Additional AVM-specific services                |
+
+**Observations:**
+
+- **Only expected, vendor-legitimate services are present.** Every open port
+  maps to a known FRITZ!OS function (DNS, web UI, VoIP, AVM management). Nothing
+  foreign or unexpected is exposed — a good baseline result.
+- **The web interface ships with strong security headers.** The HTTP response
+  includes `X-Frame-Options: SAMEORIGIN` (clickjacking protection),
+  `X-Content-Type-Options: nosniff` (anti MIME-sniffing), a restrictive
+  `Content-Security-Policy` (XSS mitigation), and a `Referrer-Policy`. This
+  indicates a security-conscious default configuration.
+- **HTTP (port 80) is open in cleartext.** The admin interface is reachable over
+  unencrypted HTTP as well as HTTPS. Best practice is to serve the admin UI over
+  HTTPS only (or strictly redirect HTTP → HTTPS). → candidate for Step 4.
+- **The TLS certificate is self-signed / device-specific.** Normal for consumer
+  routers, but it explains the browser certificate warning when opening the web
+  UI. Low risk on the LAN.
 
 ---
 
