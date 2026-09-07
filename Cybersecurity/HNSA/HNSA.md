@@ -17,7 +17,7 @@ measure. All scanning is performed exclusively on my own network.
 An **IP address** is the numeric address that uniquely identifies a device
 within a network so that data can be sent to and from it.
 
-**1a — Find your IP address and subnet mask.** Run `ip a` to inspect the network
+**1a. Find your IP address and subnet mask.** Run `ip a` to inspect the network
 interfaces. The relevant line looks like this (values replaced with
 placeholders):
 
@@ -54,7 +54,7 @@ $$
 Since one free block spans $0$–$255$, a `/24` network contains $2^8 = 256$
 possible addresses.
 
-**1b — Find the default gateway (the router).** The **default gateway** is the
+**1b. Find the default gateway (the router).** The **default gateway** is the
 device (the router) through which all traffic leaving the local network is
 sent, which makes it the key target of this assessment. Find it by running
 `ip route` and reading the address after `default via`:
@@ -148,7 +148,7 @@ sudo nmap -sV -sC -O -p- <target address (e.g. router)>
 
 - **Only expected, vendor-legitimate services are present.** Every open port
   maps to a known FRITZ!OS function (DNS, web UI, VoIP, AVM management). Nothing
-  foreign or unexpected is exposed — a good baseline result.
+  foreign or unexpected is exposed, a good baseline result.
 - **The web interface ships with strong security headers.** The HTTP response
   includes `X-Frame-Options: SAMEORIGIN` (clickjacking protection),
   `X-Content-Type-Options: nosniff` (anti MIME-sniffing), a restrictive
@@ -165,19 +165,107 @@ sudo nmap -sV -sC -O -p- <target address (e.g. router)>
 
 ### Step 4: Risk Analysis
 
-oppen Port → Applications in action → running Versions → Comparssin with DB for Exploits or something equivlant → riskassment 
+**Methodology:** for each open port, follow the chain
+
+open port → service/application → running version → compare against known
+vulnerability databases (e.g. NVD / CVE, Exploit-DB) → risk assessment.
+
+The version is the key link: publicly known vulnerabilities (CVEs) are almost
+always tied to specific versions, so an outdated version is what turns an open
+port into an actual risk. This assessment identifies and rates risks only; no
+exploits were run.
+
+**Risk table:**
+
+| Finding                          | Port(s)        | Risk   | Reasoning                                                                 | Recommendation                                    |
+|----------------------------------|----------------|--------|---------------------------------------------------------------------------|---------------------------------------------------|
+| Cleartext HTTP admin interface   | 80             | Medium | Admin UI reachable over unencrypted HTTP; credentials/config could be exposed on a compromised LAN | Disable HTTP or strictly redirect HTTP → HTTPS    |
+| Self-signed TLS certificate      | 443            | Low    | Causes browser warnings; no trusted chain, but expected for a LAN device  | Accept for LAN use; be aware when connecting       |
+| Many management services exposed | 8181–8189, 49000, 49443, ... | Low–Medium | Large internal attack surface; each service is a potential entry point    | Keep firmware updated; disable remote access (MyFRITZ/UPnP) if unused |
+| VoIP/SIP service                 | 5060           | Low    | Expected if telephony is used; SIP can be targeted for abuse if exposed externally | Ensure not reachable from the internet             |
+| DNS resolver                     | 53             | Low    | Normal for a home router; risk only if misconfigured as open resolver     | No action needed on LAN                            |
+
+**Positive findings (already well configured):**
+
+- Strong HTTP security headers (`X-Frame-Options`, `X-Content-Type-Options: nosniff`,
+  a restrictive `Content-Security-Policy`, `Referrer-Policy`): good protection
+  against clickjacking, MIME-sniffing and XSS.
+- Only vendor-legitimate services exposed; no unexpected or foreign services.
+- Up-to-date Linux kernel base.
+
+**Overall:** the router is solidly configured. The findings are refinements
+(cleartext HTTP, large management surface) rather than critical holes; a
+realistic result for a modern consumer router.
 
 ---
 
 ### Step 5: Hardening
 
-*(to be completed)*
+Based on the risk analysis, the following measures reduce the router's attack
+surface. They are split into what was actually applied during this assessment
+and what is additionally recommended.
+
+**Measures applied:**
+
+*(Fill in what you actually did. Example phrasing:)*
+
+- Remote access to the admin interface (MyFRITZ / internet access) was disabled,
+  as the router does not need to be managed from outside the home network.
+- UPnP was disabled, since no device required automatic port forwarding.
+- The admin password was replaced with a strong, unique password.
+
+After applying the change(s), the scan was repeated to verify the effect
+(before/after: *describe what changed, e.g. a port that no longer appears*).
+
+**Measures recommended (not necessarily applied):**
+
+- The firmware should be kept on the latest version, as this closes known
+  vulnerabilities in the exposed services.
+- The admin interface should be accessed only over HTTPS rather than plain HTTP,
+  ideally with HTTP redirected to HTTPS.
+- Services that are not used (e.g. VoIP/SIP without telephony) should be
+  disabled to further reduce the exposed surface.
+- Remote-management and UPnP features should remain off unless a concrete need
+  arises.
 
 ---
 
 ### Conclusion & Learnings
 
-*(to be completed)*
+This assessment mapped my own home network, examined the router as the most
+security-relevant host, and turned the scan output into a structured risk
+analysis and a set of hardening actions.
+
+**Result in short:** the router is solidly configured. Only vendor-legitimate
+services are exposed, the web interface ships with strong security headers, and
+the system runs on an up-to-date Linux base. The findings were refinements:
+cleartext HTTP alongside HTTPS, a self-signed certificate, and a fairly large
+management surface, rather than critical vulnerabilities. A realistic outcome
+that was more informative than a dramatic "many holes found" would have been.
+
+**Key learnings:**
+
+- **The version is what makes a port risky.** An open port is not a
+  vulnerability by itself; the running service *version* is the link to known
+  CVEs, which is why version detection (`-sV`) is central to any assessment.
+- **Recognising good configuration matters as much as finding flaws.** The most
+  valuable part of the analysis was judging *why* the router's defaults were
+  sound, not just listing open ports.
+- **Most of these defences solve one underlying problem: separating data from
+  code.** Analysing the security headers made this click. `X-Content-Type-Options:
+  nosniff` stops the browser from re-interpreting data (an image) as code
+  (a script); a strict `Content-Security-Policy` only lets explicitly authorised
+  code run. The same idea reappears across the field: a file is just bytes, and
+  whether those bytes are "data" or "code" depends entirely on which interpreter
+  is allowed to read them. Controlling that boundary is the recurring theme
+  behind clickjacking, MIME-sniffing and XSS defences alike.
+- **Hardening is only real once verified.** Applying a change and re-scanning to
+  confirm the effect is what separates a genuine hardening step from a
+  theoretical recommendation.
+
+**Next steps / possible extensions:** scan other devices (IoT, printers) that
+often expose more than a router does, extend the assessment to IPv6, or automate
+the parsing of nmap output into a report as a separate follow-up project.
 
 ---
 
