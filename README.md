@@ -12,4 +12,5 @@
 ## Machine Learning
 
 - Flower Classification with Keras
+- Spam Detection with Logistic Regression (Keras)
 
